@@ -321,3 +321,63 @@ class MulticastLibrary(object):
             raise ValueError(f"Failed to save the image: {filename}")
 
         return filename
+
+
+    @keyword("Get Streaming Frame")
+    def Get_Streaming_Frames(multicast_url: str, frame_count: int = 10) -> list:
+        """
+        Captures and returns multiple frames from the video stream.
+
+        :param multicast_url: The streaming URL (e.g., udp://, rtp://, rtsp://).
+        :param frame_count: Number of frames to capture (default: 10).
+        :return: A list of frames (each as a NumPy array).
+        """
+        capture_video = cv2.VideoCapture(multicast_url)
+
+        if not capture_video.isOpened():
+            raise ValueError(f"Failed to open video stream: {multicast_url}")
+
+        frames = []
+        
+        try:
+            for _ in range(frame_count):
+                ret, frame = capture_video.read()
+                if not ret:
+                    print("Warning: Failed to capture frame.")
+                    break
+                frames.append(frame)
+        finally:
+            capture_video.release()
+
+        if not frames:
+            raise ValueError("No frames captured from stream")
+
+        return frames
+
+
+    @keyword("Convert Frames To Images")
+    def Convert_Frames_To_Images(frames: list, directory_path: str, width: int = None, height: int = None):
+        """
+        Converts and saves multiple frames as images in the specified directory.
+
+        :param frames: List of frames (NumPy arrays) to be saved.
+        :param directory_path: Directory where images will be stored.
+        :param width: Desired width of the output images. (Optional)
+        :param height: Desired height of the output images. (Optional)
+        :return: None
+        """
+        if not os.path.exists(directory_path):
+            os.makedirs(directory_path, exist_ok=True)
+
+        if not isinstance(frames, list):
+            raise TypeError("Frames must be a list.")
+
+        for idx, frame in enumerate(frames, start=1):
+            filename = os.path.join(directory_path, f"Frame{idx}.jpg")
+            if width and height:
+                frame = cv2.resize(frame, (width, height), interpolation=cv2.INTER_AREA)
+
+            success = cv2.imwrite(filename, frame, [int(cv2.IMWRITE_JPEG_QUALITY), 100])
+            
+            if not success:
+                raise ValueError(f"Failed to save the image: {filename}")
