@@ -307,13 +307,17 @@ class MulticastLibrary(object):
         """
         if not isinstance(frame, numpy.ndarray):
             raise TypeError("Frame must be a numpy.ndarray.")
-        
-        if not os.path.isfile(filename):
-            os.makedirs(os.path.dirname(filename), exist_ok=True)
-        
+
+        directory = os.path.dirname(filename)
+        if directory and not os.path.exists(directory):
+            os.makedirs(directory, exist_ok=True)
+
         if width and height:
             frame = cv2.resize(frame, (width, height), interpolation=cv2.INTER_AREA)
-        
-        cv2.imwrite(filename, frame, [int(cv2.IMWRITE_JPEG_QUALITY), 100])
-        return filename
 
+        success = cv2.imwrite(filename, frame, [int(cv2.IMWRITE_JPEG_QUALITY), 100])
+        
+        if not success:
+            raise ValueError(f"Failed to save the image: {filename}")
+
+        return filename
