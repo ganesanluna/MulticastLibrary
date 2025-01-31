@@ -281,11 +281,14 @@ class MulticastLibrary(object):
         :param multicast_url: Specify a url like udp, 
         :return: The current frame as a NumPy array.
         """
-        capture_video = cv2.VideoCapture(multicast_url)
+        capture_video = cv2.VideoCapture(multicast_url, cv2.CAP_FFMPEG)
 
         if not capture_video.isOpened():
             raise ValueError(f"Failed to open video stream: {multicast_url}")
         
+        capture_video.set(cv2.CAP_PROP_BUFFERSIZE, 2)
+        capture_video.set(cv2.CAP_PROP_FPS, 30)
+
         ret, frame = capture_video.read()
         capture_video.release()
 
@@ -323,8 +326,8 @@ class MulticastLibrary(object):
         return filename
 
 
-    @keyword("Get Streaming Frame")
-    def Get_Streaming_Frames(multicast_url: str, frame_count: int = 10) -> list:
+    @keyword("Get Streaming Frames")
+    def Get_Streaming_Frames(self, multicast_url: str, frame_count: int = 10) -> list:
         """
         Captures and returns multiple frames from the video stream.
 
@@ -332,10 +335,13 @@ class MulticastLibrary(object):
         :param frame_count: Number of frames to capture (default: 10).
         :return: A list of frames (each as a NumPy array).
         """
-        capture_video = cv2.VideoCapture(multicast_url)
+        capture_video = cv2.VideoCapture(multicast_url, cv2.CAP_FFMPEG)
 
         if not capture_video.isOpened():
             raise ValueError(f"Failed to open video stream: {multicast_url}")
+        
+        capture_video.set(cv2.CAP_PROP_BUFFERSIZE, 2)
+        capture_video.set(cv2.CAP_PROP_FPS, 30)
 
         frames = []
         
@@ -356,12 +362,12 @@ class MulticastLibrary(object):
 
 
     @keyword("Convert Frames To Images")
-    def Convert_Frames_To_Images(frames: list, directory_path: str, width: int = None, height: int = None):
+    def Convert_Frames_To_Images(self, frames: list, directory_path: str = ".", width: int = None, height: int = None):
         """
         Converts and saves multiple frames as images in the specified directory.
 
         :param frames: List of frames (NumPy arrays) to be saved.
-        :param directory_path: Directory where images will be stored.
+        :param directory_path: Directory where images will be stored. (default=current directory) 
         :param width: Desired width of the output images. (Optional)
         :param height: Desired height of the output images. (Optional)
         :return: None
