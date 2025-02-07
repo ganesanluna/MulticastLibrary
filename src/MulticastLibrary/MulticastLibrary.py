@@ -13,7 +13,8 @@ from pathlib import Path
 from robot.api.deco import keyword
 
 
-class MulticastLibrary(object):
+class MulticastLibrary():
+    
     stop_sending = threading.Event()
 
     @keyword("Get Frame Counts")
@@ -167,6 +168,20 @@ class MulticastLibrary(object):
         return send_sock
 
 
+    def __Create_Socket(self, ttl: int = 5) -> socket.socket:
+        """
+        Create a Sending Multicast socket.
+
+        :param sock: An object representing the multicast socket (e.g., from Create Multicast Socket).
+        :param ttl: The TTL value to be set. Defaults to 5.
+        :return: The socket object with the updated TTL value.
+        """
+        send_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
+        ttl_bytes = struct.pack('b', ttl)
+        send_sock.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_TTL, ttl_bytes)
+        return send_sock
+
+
     @staticmethod
     @keyword("Create Receive Socket")
     def Create_Receive_Socket(multicast_group: str = "239.239.239.239", port: int = 5999) -> socket.socket:
@@ -187,14 +202,14 @@ class MulticastLibrary(object):
 
     @staticmethod
     @keyword("Send Multicast Message")
-    def Send_Multicast_Message(send_sock: socket.socket, multicast_group: str, port: int, message: str, interval: float = 1, duration: float = 5):
+    def Send_Multicast_Message(send_sock: socket.socket, multicast_group: str= "239.239.239.239", port: int = 5999, message: str = "Hello Multicast", interval: float = 1, duration: float = 5):
         """
         Sends multicast messages periodically in a separate thread.
 
         :param send_sock: An object representing the sending multicast socket.
         :param multicast_group: The multicast_group value to be set. Defaults to '239.239.239.239'.
         :param port: The port value to be set. Defaults to 5999.
-        :param message: A message value to be set.
+        :param message: A message value to be set. Defaults to "Hello Multicast"
         :param interval: Wait for a sending message
         :param duration: thread duration
         :return: An encoded value message string should be returned.
@@ -387,3 +402,78 @@ class MulticastLibrary(object):
             
             if not success:
                 raise ValueError(f"Failed to save the image: {filename}")
+
+
+    def _stream_video(self, sock, multicast_group, port, video):
+        """
+        Internal function to stream video in a separate thread.
+
+        :param sock: An object represent a create multicast socket.
+        :param multicast_group: The multicast group value to be set. Defaults to '239.239.239.239'.
+        :param port: The port value to be set. Defaults to 5999.
+        :param video: Mention a video source file. Defaults to None (webcam).
+        """
+        cap = cv2.VideoCapture(0 if video is None else video)
+
+        if not cap.isOpened():
+            print("Error: Could not open video source.")
+            return
+
+        try:
+            while self.streaming:
+                ret, frame = cap.read()
+                if not ret:
+                    break
+
+                ret, buffer = cv2.imencode('.jpg', frame)
+                if not ret:
+                    continue
+
+                frame_data = buffer.tobytes()
+                chunk_size = 60000
+                total_chunks = (len(frame_data) // chunk_size) + 1
+
+                for i in range(total_chunks):
+                    chunk_data = frame_data[i * chunk_size:(i + 1) * chunk_size]
+                    header = struct.pack("B", i) + struct.pack("B", total_chunks)
+                    sock.sendto(header + chunk_data, (multicast_group, port))
+
+                time.sleep(1 / 30)
+
+        except Exception as e:
+            print(f"Error in streaming: {e}")
+
+        finally:
+            cap.release()
+            sock.close()
+
+
+    @keyword("Create Multicast Video Server")
+    def Create_Multicast_Video_Server(self, multicast_group="239.239.239.239", port=5999, video=None):
+        """
+        Create a new multicast video server in a separate thread.
+
+        :param multicast_group: The multicast group value to be set. Defaults to '239.239.239.239'.
+        :param port: The port value to be set. Defaults to 5999.
+        :param video: Mention a video source file. Defaults to None (webcam).
+        :return: A confirmation message.
+        """
+        self.streaming = True
+        sock = self.__Create_Socket(ttl=3)
+
+        self.stream_thread = threading.Thread(target=self._stream_video, args=(sock, multicast_group, port, video))
+        self.stream_thread.start()
+
+
+    def Stop_Multicast_Video_Server(self):
+        """
+        Stop the multicast video streaming.
+        """
+        self.streaming = False
+        if self.stream_thread.is_alive():
+            self.stream_thread.join()
+
+
+if __name__ == "__main__":
+    obj = MulticastLibrary()
+    obj.Create_Multicast_Video_Server()
